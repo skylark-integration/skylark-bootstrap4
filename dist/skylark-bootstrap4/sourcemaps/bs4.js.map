@@ -1,0 +1,1 @@
+{"version":3,"sources":["bs4.js"],"names":["define","skylark","ui","bs4"],"mappings":";;;;;;;AAAAA,QACE,6BACA,SAASC,GAIV,OAHSA,EAAQC,GAAKD,EAAQC,QACpBC","file":"../bs4.js","sourcesContent":["define([\n  \"skylark-utils-dom/skylark\",\n],function(skylark){\n\tvar ui = skylark.ui = skylark.ui || {}, \n\t\tbs4 = ui.bs4 = {};\n\n\treturn bs4;\n});\n"]}
