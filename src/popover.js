@@ -1,9 +1,10 @@
 define([
+    'skylark-utils-dom/langx',
     'skylark-utils-dom/query',
     'skylark-utils-dom/plugins',
     "./bs4",
     './tooltip'
-], function ($, plugins,bs4,Tooltip) {
+], function (langx,$, plugins,bs4,Tooltip) {
     
     'use strict';
     const NAME = 'popover';

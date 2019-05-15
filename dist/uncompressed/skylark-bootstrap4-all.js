@@ -37,11 +37,16 @@
                 deps: deps.map(function(dep){
                   return absolute(dep,id);
                 }),
+                resolved: false,
                 exports: null
             };
             require(id);
         } else {
-            map[id] = factory;
+            map[id] = {
+                factory : null,
+                resolved : true,
+                exports : factory
+            };
         }
     };
     require = globals.require = function(id) {
@@ -49,14 +54,15 @@
             throw new Error('Module ' + id + ' has not been defined');
         }
         var module = map[id];
-        if (!module.exports) {
+        if (!module.resolved) {
             var args = [];
 
             module.deps.forEach(function(dep){
                 args.push(require(dep));
             })
 
-            module.exports = module.factory.apply(globals, args);
+            module.exports = module.factory.apply(globals, args) || null;
+            module.resolved = true;
         }
         return module.exports;
     };
@@ -14106,11 +14112,12 @@ define('skylark-bootstrap4/tooltip',[
     return Tooltip;
 });
 define('skylark-bootstrap4/popover',[
+    'skylark-utils-dom/langx',
     'skylark-utils-dom/query',
     'skylark-utils-dom/plugins',
     "./bs4",
     './tooltip'
-], function ($, plugins,bs4,Tooltip) {
+], function (langx,$, plugins,bs4,Tooltip) {
     
     'use strict';
     const NAME = 'popover';
@@ -14463,11 +14470,13 @@ define('skylark-bootstrap4/scrollspy',[
     return ScrollSpy;
 });
 define('skylark-bootstrap4/tab',[
+    'skylark-langx/langx',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/query',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function ($, plugins,bs4,Util) {
+], function (langx,eventer,$, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'tab';
@@ -14516,11 +14525,11 @@ define('skylark-bootstrap4/tab',[
             const selector = Util.getSelectorFromElement(this._element);
             if (listElement) {
                 const itemSelector = listElement.nodeName === 'UL' || listElement.nodeName === 'OL' ? Selector.ACTIVE_UL : Selector.ACTIVE;
-                previous = $.makeArray($(listElement).find(itemSelector));
+                previous = langx.makeArray($(listElement).find(itemSelector));
                 previous = previous[previous.length - 1];
             }
-            const hideEvent = $.Event(Event.HIDE, { relatedTarget: this._element });
-            const showEvent = $.Event(Event.SHOW, { relatedTarget: previous });
+            const hideEvent = eventer.create(Event.HIDE, { relatedTarget: this._element });
+            const showEvent = eventer.create(Event.SHOW, { relatedTarget: previous });
             if (previous) {
                 $(previous).trigger(hideEvent);
             }

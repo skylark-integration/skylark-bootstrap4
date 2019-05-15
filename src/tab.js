@@ -1,9 +1,11 @@
 define([
+    'skylark-langx/langx',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/query',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function ($, plugins,bs4,Util) {
+], function (langx,eventer,$, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'tab';
@@ -52,11 +54,11 @@ define([
             const selector = Util.getSelectorFromElement(this._element);
             if (listElement) {
                 const itemSelector = listElement.nodeName === 'UL' || listElement.nodeName === 'OL' ? Selector.ACTIVE_UL : Selector.ACTIVE;
-                previous = $.makeArray($(listElement).find(itemSelector));
+                previous = langx.makeArray($(listElement).find(itemSelector));
                 previous = previous[previous.length - 1];
             }
-            const hideEvent = $.Event(Event.HIDE, { relatedTarget: this._element });
-            const showEvent = $.Event(Event.SHOW, { relatedTarget: previous });
+            const hideEvent = eventer.create(Event.HIDE, { relatedTarget: this._element });
+            const showEvent = eventer.create(Event.SHOW, { relatedTarget: previous });
             if (previous) {
                 $(previous).trigger(hideEvent);
             }
