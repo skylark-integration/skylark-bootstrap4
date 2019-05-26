@@ -1,9 +1,10 @@
 define([
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function ($, plugins,bs4,Util) {
+], function ($, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'alert';
@@ -57,7 +58,7 @@ define([
             return parent;
         }
         _triggerCloseEvent(element) {
-            const closeEvent = $.Event(Event.CLOSE);
+            const closeEvent = eventer.create(Event.CLOSE);
             $(element).trigger(closeEvent);
             return closeEvent;
         }

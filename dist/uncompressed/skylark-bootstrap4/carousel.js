@@ -1,10 +1,11 @@
 define([
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'carousel';
@@ -279,7 +280,7 @@ define([
         _triggerSlideEvent(relatedTarget, eventDirectionName) {
             const targetIndex = this._getItemIndex(relatedTarget);
             const fromIndex = this._getItemIndex(this._element.querySelector(Selector.ACTIVE_ITEM));
-            const slideEvent = $.Event(Event.SLIDE, {
+            const slideEvent = eventer.create(Event.SLIDE, {
                 relatedTarget,
                 direction: eventDirectionName,
                 from: fromIndex,
@@ -332,7 +333,7 @@ define([
                 this.pause();
             }
             this._setActiveIndicatorElement(nextElement);
-            const slidEvent = $.Event(Event.SLID, {
+            const slidEvent = eventer.create(Event.SLID, {
                 relatedTarget: nextElement,
                 direction: eventDirectionName,
                 from: activeElementIndex,

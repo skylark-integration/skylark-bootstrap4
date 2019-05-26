@@ -1,10 +1,12 @@
 define([
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
+
 
     'use strict';
     const NAME = 'modal';
@@ -81,7 +83,7 @@ define([
             if ($(this._element).hasClass(ClassName.FADE)) {
                 this._isTransitioning = true;
             }
-            const showEvent = $.Event(Event.SHOW, { relatedTarget });
+            const showEvent = eventer.create(Event.SHOW, { relatedTarget });
             $(this._element).trigger(showEvent);
             if (this._isShown || showEvent.isDefaultPrevented()) {
                 return;
@@ -109,7 +111,7 @@ define([
             if (!this._isShown || this._isTransitioning) {
                 return;
             }
-            const hideEvent = $.Event(Event.HIDE);
+            const hideEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(hideEvent);
             if (!this._isShown || hideEvent.isDefaultPrevented()) {
                 return;
@@ -179,7 +181,7 @@ define([
             if (this._config.focus) {
                 this._enforceFocus();
             }
-            const shownEvent = $.Event(Event.SHOWN, { relatedTarget });
+            const shownEvent = eventer.create(Event.SHOWN, { relatedTarget });
             const transitionComplete = () => {
                 if (this._config.focus) {
                     this._element.focus();

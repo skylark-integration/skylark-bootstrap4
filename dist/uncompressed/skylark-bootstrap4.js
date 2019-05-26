@@ -138,7 +138,7 @@ define('skylark-bootstrap4/util',[
 
     function setTransitionEndSupport() {
         $.fn.emulateTransitionEnd = transitionEndEmulator;
-        $.event.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
+        eventer.create.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
     }
     */
     const Util = {
@@ -230,10 +230,11 @@ define('skylark-bootstrap4/util',[
 });
 define('skylark-bootstrap4/alert',[
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function ($, plugins,bs4,Util) {
+], function ($, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'alert';
@@ -287,7 +288,7 @@ define('skylark-bootstrap4/alert',[
             return parent;
         }
         _triggerCloseEvent(element) {
-            const closeEvent = $.Event(Event.CLOSE);
+            const closeEvent = eventer.create(Event.CLOSE);
             $(element).trigger(closeEvent);
             return closeEvent;
         }
@@ -448,10 +449,11 @@ define('skylark-bootstrap4/button',[
 define('skylark-bootstrap4/carousel',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'carousel';
@@ -726,7 +728,7 @@ define('skylark-bootstrap4/carousel',[
         _triggerSlideEvent(relatedTarget, eventDirectionName) {
             const targetIndex = this._getItemIndex(relatedTarget);
             const fromIndex = this._getItemIndex(this._element.querySelector(Selector.ACTIVE_ITEM));
-            const slideEvent = $.Event(Event.SLIDE, {
+            const slideEvent = eventer.create(Event.SLIDE, {
                 relatedTarget,
                 direction: eventDirectionName,
                 from: fromIndex,
@@ -779,7 +781,7 @@ define('skylark-bootstrap4/carousel',[
                 this.pause();
             }
             this._setActiveIndicatorElement(nextElement);
-            const slidEvent = $.Event(Event.SLID, {
+            const slidEvent = eventer.create(Event.SLID, {
                 relatedTarget: nextElement,
                 direction: eventDirectionName,
                 from: activeElementIndex,
@@ -891,10 +893,11 @@ define('skylark-bootstrap4/carousel',[
 define('skylark-bootstrap4/collapse',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'collapse';
@@ -992,7 +995,7 @@ define('skylark-bootstrap4/collapse',[
                     return;
                 }
             }
-            const startEvent = $.Event(Event.SHOW);
+            const startEvent = eventer.create(Event.SHOW);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;
@@ -1026,7 +1029,7 @@ define('skylark-bootstrap4/collapse',[
             if (this._isTransitioning || !$(this._element).hasClass(ClassName.SHOW)) {
                 return;
             }
-            const startEvent = $.Event(Event.HIDE);
+            const startEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;
@@ -1161,11 +1164,12 @@ define('skylark-bootstrap4/collapse',[
 define('skylark-bootstrap4/dropdown',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'dropdown';
     const VERSION = '4.1.3';
@@ -1260,7 +1264,7 @@ define('skylark-bootstrap4/dropdown',[
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
@@ -1289,35 +1293,35 @@ define('skylark-bootstrap4/dropdown',[
             this._element.focus();
             this._element.setAttribute('aria-expanded', true);
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         show() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || $(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         hide() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || !$(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const hideEvent = $.Event(Event.HIDE, relatedTarget);
+            const hideEvent = eventer.create(Event.HIDE, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(hideEvent);
             if (hideEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
         }
         dispose() {
             $.removeData(this._element, DATA_KEY);
@@ -1446,7 +1450,7 @@ define('skylark-bootstrap4/dropdown',[
                 if (event && (event.type === 'click' && /input|textarea/i.test(event.target.tagName) || event.type === 'keyup' && event.which === TAB_KEYCODE) && $.contains(parent, event.target)) {
                     continue;
                 }
-                const hideEvent = $.Event(Event.HIDE, relatedTarget);
+                const hideEvent = eventer.create(Event.HIDE, relatedTarget);
                 $(parent).trigger(hideEvent);
                 if (hideEvent.isDefaultPrevented()) {
                     continue;
@@ -1456,7 +1460,7 @@ define('skylark-bootstrap4/dropdown',[
                 }
                 toggles[i].setAttribute('aria-expanded', 'false');
                 $(dropdownMenu).removeClass(ClassName.SHOW);
-                $(parent).removeClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+                $(parent).removeClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
             }
         }
         static _getParentFromElement(element) {
@@ -1521,10 +1525,12 @@ define('skylark-bootstrap4/dropdown',[
 define('skylark-bootstrap4/modal',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
+
 
     'use strict';
     const NAME = 'modal';
@@ -1601,7 +1607,7 @@ define('skylark-bootstrap4/modal',[
             if ($(this._element).hasClass(ClassName.FADE)) {
                 this._isTransitioning = true;
             }
-            const showEvent = $.Event(Event.SHOW, { relatedTarget });
+            const showEvent = eventer.create(Event.SHOW, { relatedTarget });
             $(this._element).trigger(showEvent);
             if (this._isShown || showEvent.isDefaultPrevented()) {
                 return;
@@ -1629,7 +1635,7 @@ define('skylark-bootstrap4/modal',[
             if (!this._isShown || this._isTransitioning) {
                 return;
             }
-            const hideEvent = $.Event(Event.HIDE);
+            const hideEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(hideEvent);
             if (!this._isShown || hideEvent.isDefaultPrevented()) {
                 return;
@@ -1699,7 +1705,7 @@ define('skylark-bootstrap4/modal',[
             if (this._config.focus) {
                 this._enforceFocus();
             }
-            const shownEvent = $.Event(Event.SHOWN, { relatedTarget });
+            const shownEvent = eventer.create(Event.SHOWN, { relatedTarget });
             const transitionComplete = () => {
                 if (this._config.focus) {
                     this._element.focus();
@@ -1937,11 +1943,12 @@ define('skylark-bootstrap4/modal',[
 define('skylark-bootstrap4/tooltip',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'tooltip';
     const VERSION = '4.1.3';
@@ -2110,7 +2117,7 @@ define('skylark-bootstrap4/tooltip',[
             if ($(this.element).css('display') === 'none') {
                 throw new Error('Please use show on visible elements');
             }
-            const showEvent = $.Event(this.constructor.Event.SHOW);
+            const showEvent = eventer.create(this.constructor.Event.SHOW);
             if (this.isWithContent() && this._isEnabled) {
                 $(this.element).trigger(showEvent);
                 const shadowRoot = Util.findShadowRoot(this.element);
@@ -2175,7 +2182,7 @@ define('skylark-bootstrap4/tooltip',[
         }
         hide(callback) {
             const tip = this.getTipElement();
-            const hideEvent = $.Event(this.constructor.Event.HIDE);
+            const hideEvent = eventer.create(this.constructor.Event.HIDE);
             const complete = () => {
                 if (this._hoverState !== HoverState.SHOW && tip.parentNode) {
                     tip.parentNode.removeChild(tip);
@@ -2875,8 +2882,8 @@ define('skylark-bootstrap4/tab',[
             }
             this._activate(this._element, listElement);
             const complete = () => {
-                const hiddenEvent = $.Event(Event.HIDDEN, { relatedTarget: this._element });
-                const shownEvent = $.Event(Event.SHOWN, { relatedTarget: previous });
+                const hiddenEvent = eventer.create(Event.HIDDEN, { relatedTarget: this._element });
+                const shownEvent = eventer.create(Event.SHOWN, { relatedTarget: previous });
                 $(previous).trigger(hiddenEvent);
                 $(this._element).trigger(shownEvent);
             };

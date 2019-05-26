@@ -1,10 +1,11 @@
 define([
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'collapse';
@@ -102,7 +103,7 @@ define([
                     return;
                 }
             }
-            const startEvent = $.Event(Event.SHOW);
+            const startEvent = eventer.create(Event.SHOW);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;
@@ -136,7 +137,7 @@ define([
             if (this._isTransitioning || !$(this._element).hasClass(ClassName.SHOW)) {
                 return;
             }
-            const startEvent = $.Event(Event.HIDE);
+            const startEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;

@@ -71,8 +71,8 @@ define([
             }
             this._activate(this._element, listElement);
             const complete = () => {
-                const hiddenEvent = $.Event(Event.HIDDEN, { relatedTarget: this._element });
-                const shownEvent = $.Event(Event.SHOWN, { relatedTarget: previous });
+                const hiddenEvent = eventer.create(Event.HIDDEN, { relatedTarget: this._element });
+                const shownEvent = eventer.create(Event.SHOWN, { relatedTarget: previous });
                 $(previous).trigger(hiddenEvent);
                 $(this._element).trigger(shownEvent);
             };

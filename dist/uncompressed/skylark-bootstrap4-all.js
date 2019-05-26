@@ -86,9 +86,31 @@
 
 })(function(define,require) {
 
-define('skylark-langx/skylark',[], function() {
-    var skylark = {
+define('skylark-langx/_attach',[],function(){
+    return  function attach(obj1,path,obj2) {
+        if (typeof path == "string") {
+            path = path.split(".");//[path]
+        };
+        var length = path.length,
+            ns=obj1,
+            i=0,
+            name = path[i++];
 
+        while (i < length) {
+            ns = ns[name] = ns[name] || {};
+            name = path[i++];
+        }
+
+        return ns[name] = obj2;
+    }
+});
+define('skylark-langx/skylark',[
+    "./_attach"
+], function(_attach) {
+    var skylark = {
+    	attach : function(path,obj) {
+    		return _attach(skylark,path,obj);
+    	}
     };
     return skylark;
 });
@@ -98,16 +120,18 @@ define('skylark-utils-dom/skylark',["skylark-langx/skylark"], function(skylark) 
 });
 
 define('skylark-utils-dom/dom',["./skylark"], function(skylark) {
-	return skylark.dom = {};
+	return skylark.dom = skylark.attach("utils.dom",{});
 });
 
 define('skylark-langx/types',[
 ],function(){
+    var toString = {}.toString;
+    
     var type = (function() {
         var class2type = {};
 
         // Populate the class2type map
-        "Boolean Number String Function Array Date RegExp Object Error".split(" ").forEach(function(name) {
+        "Boolean Number String Function Array Date RegExp Object Error Symbol".split(" ").forEach(function(name) {
             class2type["[object " + name + "]"] = name.toLowerCase();
         });
 
@@ -121,10 +145,46 @@ define('skylark-langx/types',[
         return object && object.constructor === Array;
     }
 
+
+    /**
+     * Checks if `value` is array-like. A value is considered array-like if it's
+     * not a function/string/element and has a `value.length` that's an integer greater than or
+     * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
+     *
+     * @category Lang
+     * @param {*} value The value to check.
+     * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+     * @example
+     *
+     * isArrayLike([1, 2, 3])
+     * // => true
+     *
+     * isArrayLike(document.body.children)
+     * // => false
+     *
+     * isArrayLike('abc')
+     * // => true
+     *
+     * isArrayLike(Function)
+     * // => false
+     */    
     function isArrayLike(obj) {
         return !isString(obj) && !isHtmlNode(obj) && typeof obj.length == 'number' && !isFunction(obj);
     }
 
+    /**
+     * Checks if `value` is classified as a boolean primitive or object.
+     *
+     * @param {*} value The value to check.
+     * @returns {boolean} Returns `true` if `value` is a boolean, else `false`.
+     * @example
+     *
+     * isBoolean(false)
+     * // => true
+     *
+     * isBoolean(null)
+     * // => false
+     */
     function isBoolean(obj) {
         return typeof(obj) === "boolean";
     }
@@ -147,12 +207,26 @@ define('skylark-langx/types',[
         return true;
     }
 
+
+    /**
+     * Checks if `value` is classified as a `Function` object.
+     *
+     * @param {*} value The value to check.
+     * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+     * @example
+     *
+     * isFunction(parseInt)
+     * // => true
+     *
+     * isFunction(/abc/)
+     * // => false
+     */
     function isFunction(value) {
         return type(value) == "function";
     }
 
     function isHtmlNode(obj) {
-        return obj && (obj instanceof Node);
+        return obj && obj.nodeType; // obj instanceof Node; //Consider the elements in IFRAME
     }
 
     function isInstanceOf( /*Object*/ value, /*Type*/ type) {
@@ -172,6 +246,10 @@ define('skylark-langx/types',[
         } else {
             return (value instanceof type) || (value && value.isInstanceOf ? value.isInstanceOf(type) : false);
         }
+    }
+
+    function isNull(value) {
+      return type(value) === "null";
     }
 
     function isNumber(obj) {
@@ -204,6 +282,28 @@ define('skylark-langx/types',[
         }
     }
 
+    /**
+     * Checks if `value` is classified as a `Symbol` primitive or object.
+     *
+     * @param {*} value The value to check.
+     * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+     * @example
+     *
+     * _.isSymbol(Symbol.iterator);
+     * // => true
+     *
+     * _.isSymbol('abc');
+     * // => false
+     */
+    function isSymbol(value) {
+      return typeof value == 'symbol' ||
+        (isObjectLike(value) && objectToString.call(value) == symbolTag);
+    }
+
+    function isUndefined(value) {
+      return value === undefined
+    }
+
     return {
 
         isArray: isArray,
@@ -216,13 +316,19 @@ define('skylark-langx/types',[
 
         isDocument: isDocument,
 
+        isEmpty : isEmptyObject,
+
         isEmptyObject: isEmptyObject,
 
         isFunction: isFunction,
 
         isHtmlNode: isHtmlNode,
 
+        isNull: isNull,
+
         isNumber: isNumber,
+
+        isNumeric: isNumber,
 
         isObject: isObject,
 
@@ -232,22 +338,398 @@ define('skylark-langx/types',[
 
         isSameOrigin: isSameOrigin,
 
+        isSymbol : isSymbol,
+
+        isUndefined: isUndefined,
+
         isWindow: isWindow,
 
         type: type
     };
 
 });
-define('skylark-langx/objects',[
+define('skylark-langx/arrays',[
+	"./types"
+],function(types,objects){
+	var filter = Array.prototype.filter,
+		isArrayLike = types.isArrayLike;
+
+    /**
+     * The base implementation of `_.findIndex` and `_.findLastIndex` without
+     * support for iteratee shorthands.
+     *
+     * @param {Array} array The array to inspect.
+     * @param {Function} predicate The function invoked per iteration.
+     * @param {number} fromIndex The index to search from.
+     * @param {boolean} [fromRight] Specify iterating from right to left.
+     * @returns {number} Returns the index of the matched value, else `-1`.
+     */
+    function baseFindIndex(array, predicate, fromIndex, fromRight) {
+      var length = array.length,
+          index = fromIndex + (fromRight ? 1 : -1);
+
+      while ((fromRight ? index-- : ++index < length)) {
+        if (predicate(array[index], index, array)) {
+          return index;
+        }
+      }
+      return -1;
+    }
+
+    /**
+     * The base implementation of `_.indexOf` without `fromIndex` bounds checks.
+     *
+     * @param {Array} array The array to inspect.
+     * @param {*} value The value to search for.
+     * @param {number} fromIndex The index to search from.
+     * @returns {number} Returns the index of the matched value, else `-1`.
+     */
+    function baseIndexOf(array, value, fromIndex) {
+      if (value !== value) {
+        return baseFindIndex(array, baseIsNaN, fromIndex);
+      }
+      var index = fromIndex - 1,
+          length = array.length;
+
+      while (++index < length) {
+        if (array[index] === value) {
+          return index;
+        }
+      }
+      return -1;
+    }
+
+    /**
+     * The base implementation of `isNaN` without support for number objects.
+     *
+     * @private
+     * @param {*} value The value to check.
+     * @returns {boolean} Returns `true` if `value` is `NaN`, else `false`.
+     */
+    function baseIsNaN(value) {
+      return value !== value;
+    }
+
+
+    function compact(array) {
+        return filter.call(array, function(item) {
+            return item != null;
+        });
+    }
+
+    function filter2(array,func) {
+      return filter.call(array,func);
+    }
+
+    function flatten(array) {
+        if (isArrayLike(array)) {
+            var result = [];
+            for (var i = 0; i < array.length; i++) {
+                var item = array[i];
+                if (isArrayLike(item)) {
+                    for (var j = 0; j < item.length; j++) {
+                        result.push(item[j]);
+                    }
+                } else {
+                    result.push(item);
+                }
+            }
+            return result;
+        } else {
+            return array;
+        }
+        //return array.length > 0 ? concat.apply([], array) : array;
+    }
+
+    function grep(array, callback) {
+        var out = [];
+
+        each(array, function(i, item) {
+            if (callback(item, i)) {
+                out.push(item);
+            }
+        });
+
+        return out;
+    }
+
+    function inArray(item, array) {
+        if (!array) {
+            return -1;
+        }
+        var i;
+
+        if (array.indexOf) {
+            return array.indexOf(item);
+        }
+
+        i = array.length;
+        while (i--) {
+            if (array[i] === item) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    function makeArray(obj, offset, startWith) {
+       if (isArrayLike(obj) ) {
+        return (startWith || []).concat(Array.prototype.slice.call(obj, offset || 0));
+      }
+
+      // array of single index
+      return [ obj ];             
+    }
+
+
+    function forEach (arr, fn) {
+      if (arr.forEach) return arr.forEach(fn)
+      for (var i = 0; i < arr.length; i++) fn(arr[i], i);
+    }
+
+    function map(elements, callback) {
+        var value, values = [],
+            i, key
+        if (isArrayLike(elements))
+            for (i = 0; i < elements.length; i++) {
+                value = callback.call(elements[i], elements[i], i);
+                if (value != null) values.push(value)
+            }
+        else
+            for (key in elements) {
+                value = callback.call(elements[key], elements[key], key);
+                if (value != null) values.push(value)
+            }
+        return flatten(values)
+    }
+
+
+    function merge( first, second ) {
+      var l = second.length,
+          i = first.length,
+          j = 0;
+
+      if ( typeof l === "number" ) {
+        for ( ; j < l; j++ ) {
+          first[ i++ ] = second[ j ];
+        }
+      } else {
+        while ( second[j] !== undefined ) {
+          first[ i++ ] = second[ j++ ];
+        }
+      }
+
+      first.length = i;
+
+      return first;
+    }
+
+    function reduce(array,callback,initialValue) {
+        return Array.prototype.reduce.call(array,callback,initialValue);
+    }
+
+    function uniq(array) {
+        return filter.call(array, function(item, idx) {
+            return array.indexOf(item) == idx;
+        })
+    }
+
+    return {
+        baseFindIndex: baseFindIndex,
+
+        baseIndexOf : baseIndexOf,
+        
+        compact: compact,
+
+        first : function(items,n) {
+            if (n) {
+                return items.slice(0,n);
+            } else {
+                return items[0];
+            }
+        },
+
+        filter : filter2,
+        
+        flatten: flatten,
+
+        inArray: inArray,
+
+        makeArray: makeArray,
+
+        merge : merge,
+
+        forEach : forEach,
+
+        map : map,
+        
+        reduce : reduce,
+
+        uniq : uniq
+
+    }
+});
+define('skylark-langx/numbers',[
 	"./types"
 ],function(types){
+	var isObject = types.isObject,
+		isSymbol = types.isSymbol;
+
+	var INFINITY = 1 / 0,
+	    MAX_SAFE_INTEGER = 9007199254740991,
+	    MAX_INTEGER = 1.7976931348623157e+308,
+	    NAN = 0 / 0;
+
+	/** Used to match leading and trailing whitespace. */
+	var reTrim = /^\s+|\s+$/g;
+
+	/** Used to detect bad signed hexadecimal string values. */
+	var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
+
+	/** Used to detect binary string values. */
+	var reIsBinary = /^0b[01]+$/i;
+
+	/** Used to detect octal string values. */
+	var reIsOctal = /^0o[0-7]+$/i;
+
+	/** Used to detect unsigned integer values. */
+	var reIsUint = /^(?:0|[1-9]\d*)$/;
+
+	/** Built-in method references without a dependency on `root`. */
+	var freeParseInt = parseInt;
+
+	/**
+	 * Converts `value` to a finite number.
+	 *
+	 * @static
+	 * @memberOf _
+	 * @since 4.12.0
+	 * @category Lang
+	 * @param {*} value The value to convert.
+	 * @returns {number} Returns the converted number.
+	 * @example
+	 *
+	 * _.toFinite(3.2);
+	 * // => 3.2
+	 *
+	 * _.toFinite(Number.MIN_VALUE);
+	 * // => 5e-324
+	 *
+	 * _.toFinite(Infinity);
+	 * // => 1.7976931348623157e+308
+	 *
+	 * _.toFinite('3.2');
+	 * // => 3.2
+	 */
+	function toFinite(value) {
+	  if (!value) {
+	    return value === 0 ? value : 0;
+	  }
+	  value = toNumber(value);
+	  if (value === INFINITY || value === -INFINITY) {
+	    var sign = (value < 0 ? -1 : 1);
+	    return sign * MAX_INTEGER;
+	  }
+	  return value === value ? value : 0;
+	}
+
+	/**
+	 * Converts `value` to an integer.
+	 *
+	 * **Note:** This method is loosely based on
+	 * [`ToInteger`](http://www.ecma-international.org/ecma-262/7.0/#sec-tointeger).
+	 *
+	 * @static
+	 * @memberOf _
+	 * @param {*} value The value to convert.
+	 * @returns {number} Returns the converted integer.
+	 * @example
+	 *
+	 * _.toInteger(3.2);
+	 * // => 3
+	 *
+	 * _.toInteger(Number.MIN_VALUE);
+	 * // => 0
+	 *
+	 * _.toInteger(Infinity);
+	 * // => 1.7976931348623157e+308
+	 *
+	 * _.toInteger('3.2');
+	 * // => 3
+	 */
+	function toInteger(value) {
+	  var result = toFinite(value),
+	      remainder = result % 1;
+
+	  return result === result ? (remainder ? result - remainder : result) : 0;
+	}	
+
+	/**
+	 * Converts `value` to a number.
+	 *
+	 * @static
+	 * @memberOf _
+	 * @since 4.0.0
+	 * @category Lang
+	 * @param {*} value The value to process.
+	 * @returns {number} Returns the number.
+	 * @example
+	 *
+	 * _.toNumber(3.2);
+	 * // => 3.2
+	 *
+	 * _.toNumber(Number.MIN_VALUE);
+	 * // => 5e-324
+	 *
+	 * _.toNumber(Infinity);
+	 * // => Infinity
+	 *
+	 * _.toNumber('3.2');
+	 * // => 3.2
+	 */
+	function toNumber(value) {
+	  if (typeof value == 'number') {
+	    return value;
+	  }
+	  if (isSymbol(value)) {
+	    return NAN;
+	  }
+	  if (isObject(value)) {
+	    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
+	    value = isObject(other) ? (other + '') : other;
+	  }
+	  if (typeof value != 'string') {
+	    return value === 0 ? value : +value;
+	  }
+	  value = value.replace(reTrim, '');
+	  var isBinary = reIsBinary.test(value);
+	  return (isBinary || reIsOctal.test(value))
+	    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+	    : (reIsBadHex.test(value) ? NAN : +value);
+	}
+
+	return  {
+		toFinite : toFinite,
+		toNumber : toNumber,
+		toInteger : toInteger
+	}
+});
+define('skylark-langx/objects',[
+    "./_attach",
+	"./types",
+    "./numbers"
+],function(_attach,types,numbers){
 	var hasOwnProperty = Object.prototype.hasOwnProperty,
         slice = Array.prototype.slice,
         isBoolean = types.isBoolean,
         isFunction = types.isFunction,
 		isObject = types.isObject,
 		isPlainObject = types.isPlainObject,
-		isArray = types.isArray;
+		isArray = types.isArray,
+        isArrayLike = types.isArrayLike,
+        isString = types.isString,
+        toInteger = numbers.toInteger;
 
      // An internal function for creating assigner functions.
     function createAssigner(keysFunc, defaults) {
@@ -453,6 +935,50 @@ define('skylark-langx/objects',[
         return !!length;
     }
 
+    /**
+     * Checks if `value` is in `collection`. If `collection` is a string, it's
+     * checked for a substring of `value`, otherwise
+     * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+     * is used for equality comparisons. If `fromIndex` is negative, it's used as
+     * the offset from the end of `collection`.
+     *
+     * @static
+     * @memberOf _
+     * @since 0.1.0
+     * @category Collection
+     * @param {Array|Object|string} collection The collection to inspect.
+     * @param {*} value The value to search for.
+     * @param {number} [fromIndex=0] The index to search from.
+     * @param- {Object} [guard] Enables use as an iteratee for methods like `_.reduce`.
+     * @returns {boolean} Returns `true` if `value` is found, else `false`.
+     * @example
+     *
+     * _.includes([1, 2, 3], 1);
+     * // => true
+     *
+     * _.includes([1, 2, 3], 1, 2);
+     * // => false
+     *
+     * _.includes({ 'a': 1, 'b': 2 }, 1);
+     * // => true
+     *
+     * _.includes('abcd', 'bc');
+     * // => true
+     */
+    function includes(collection, value, fromIndex, guard) {
+      collection = isArrayLike(collection) ? collection : values(collection);
+      fromIndex = (fromIndex && !guard) ? toInteger(fromIndex) : 0;
+
+      var length = collection.length;
+      if (fromIndex < 0) {
+        fromIndex = nativeMax(length + fromIndex, 0);
+      }
+      return isString(collection)
+        ? (fromIndex <= length && collection.indexOf(value, fromIndex) > -1)
+        : (!!length && baseIndexOf(collection, value, fromIndex) > -1);
+    }
+
+
    // Perform a deep comparison to check if two objects are equal.
     function isEqual(a, b) {
         return eq(a, b);
@@ -517,6 +1043,37 @@ define('skylark-langx/objects',[
         return args.target;
     }
 
+   // Return a copy of the object without the blacklisted properties.
+    function omit(obj, prop1,prop2) {
+        if (!obj) {
+            return null;
+        }
+        var result = mixin({},obj);
+        for(var i=1;i<arguments.length;i++) {
+            var pn = arguments[i];
+            if (pn in obj) {
+                delete result[pn];
+            }
+        }
+        return result;
+
+    }
+
+   // Return a copy of the object only containing the whitelisted properties.
+    function pick(obj,prop1,prop2) {
+        if (!obj) {
+            return null;
+        }
+        var result = {};
+        for(var i=1;i<arguments.length;i++) {
+            var pn = arguments[i];
+            if (pn in obj) {
+                result[pn] = obj[pn];
+            }
+        }
+        return result;
+    }
+
     function removeItem(items, item) {
         if (isArray(items)) {
             var idx = items.indexOf(item);
@@ -537,7 +1094,7 @@ define('skylark-langx/objects',[
 
     function result(obj, path, fallback) {
         if (!isArray(path)) {
-            path = [path]
+            path = path.split(".");//[path]
         };
         var length = path.length;
         if (!length) {
@@ -566,7 +1123,7 @@ define('skylark-langx/objects',[
 
     // Retrieve the values of an object's properties.
     function values(obj) {
-        var keys = _.keys(obj);
+        var keys = allKeys(obj);
         var length = keys.length;
         var values = Array(length);
         for (var i = 0; i < length; i++) {
@@ -575,8 +1132,6 @@ define('skylark-langx/objects',[
         return values;
     }
 
-
-    
     function clone( /*anything*/ src,checkCloneMethod) {
         var copy;
         if (src === undefined || src === null) {
@@ -604,6 +1159,8 @@ define('skylark-langx/objects',[
     return {
         allKeys: allKeys,
 
+        attach : _attach,
+
         clone: clone,
 
         defaults : createAssigner(allKeys, true),
@@ -614,13 +1171,19 @@ define('skylark-langx/objects',[
 
         has: has,
 
-        isEqual: isEqual,
+        isEqual: isEqual,   
+
+        includes: includes,
 
         isMatch: isMatch,
 
         keys: keys,
 
         mixin: mixin,
+
+        omit: omit,
+
+        pick: pick,
 
         removeItem: removeItem,
 
@@ -631,127 +1194,8 @@ define('skylark-langx/objects',[
         values: values
     };
 
-});
-define('skylark-langx/arrays',[
-	"./types",
-    "./objects"
-],function(types,objects){
-	var filter = Array.prototype.filter,
-		isArrayLike = types.isArrayLike;
 
-    function compact(array) {
-        return filter.call(array, function(item) {
-            return item != null;
-        });
-    }
 
-    function flatten(array) {
-        if (isArrayLike(array)) {
-            var result = [];
-            for (var i = 0; i < array.length; i++) {
-                var item = array[i];
-                if (isArrayLike(item)) {
-                    for (var j = 0; j < item.length; j++) {
-                        result.push(item[j]);
-                    }
-                } else {
-                    result.push(item);
-                }
-            }
-            return result;
-        } else {
-            return array;
-        }
-        //return array.length > 0 ? concat.apply([], array) : array;
-    }
-
-    function grep(array, callback) {
-        var out = [];
-
-        each(array, function(i, item) {
-            if (callback(item, i)) {
-                out.push(item);
-            }
-        });
-
-        return out;
-    }
-
-    function inArray(item, array) {
-        if (!array) {
-            return -1;
-        }
-        var i;
-
-        if (array.indexOf) {
-            return array.indexOf(item);
-        }
-
-        i = array.length;
-        while (i--) {
-            if (array[i] === item) {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    function makeArray(obj, offset, startWith) {
-       if (isArrayLike(obj) ) {
-        return (startWith || []).concat(Array.prototype.slice.call(obj, offset || 0));
-      }
-
-      // array of single index
-      return [ obj ];             
-    }
-
-    function map(elements, callback) {
-        var value, values = [],
-            i, key
-        if (isArrayLike(elements))
-            for (i = 0; i < elements.length; i++) {
-                value = callback.call(elements[i], elements[i], i);
-                if (value != null) values.push(value)
-            }
-        else
-            for (key in elements) {
-                value = callback.call(elements[key], elements[key], key);
-                if (value != null) values.push(value)
-            }
-        return flatten(values)
-    }
-
-    function uniq(array) {
-        return filter.call(array, function(item, idx) {
-            return array.indexOf(item) == idx;
-        })
-    }
-
-    return {
-        compact: compact,
-
-        first : function(items,n) {
-            if (n) {
-                return items.slice(0,n);
-            } else {
-                return items[0];
-            }
-        },
-
-	    each: objects.each,
-
-        flatten: flatten,
-
-        inArray: inArray,
-
-        makeArray: makeArray,
-
-        map : map,
-        
-        uniq : uniq
-
-    }
 });
 define('skylark-langx/klass',[
     "./arrays",
@@ -763,6 +1207,52 @@ define('skylark-langx/klass',[
         mixin = objects.mixin,
         isArray = types.isArray,
         isDefined = types.isDefined;
+
+/* for reference 
+ function klass(props,parent) {
+    var ctor = function(){
+        this._construct();
+    };
+    ctor.prototype = props;
+    if (parent) {
+        ctor._proto_ = parent;
+        props.__proto__ = parent.prototype;
+    }
+    return ctor;
+}
+
+// Type some JavaScript code here.
+let animal = klass({
+  _construct(){
+      this.name = this.name + ",hi";
+  },
+    
+  name: "Animal",
+  eat() {         // [[HomeObject]] == animal
+    alert(`${this.name} eats.`);
+  }
+    
+    
+});
+
+
+let rabbit = klass({
+  name: "Rabbit",
+  _construct(){
+      super._construct();
+  },
+  eat() {         // [[HomeObject]] == rabbit
+    super.eat();
+  }
+},animal);
+
+let longEar = klass({
+  name: "Long Ear",
+  eat() {         // [[HomeObject]] == longEar
+    super.eat();
+  }
+},rabbit);
+*/
     
     function inherit(ctor, base) {
         var f = function() {};
@@ -776,7 +1266,8 @@ define('skylark-langx/klass',[
             // Copy the properties to the prototype of the class.
             var proto = ctor.prototype,
                 _super = ctor.superclass.prototype,
-                noOverrided = options && options.noOverrided;
+                noOverrided = options && options.noOverrided,
+                overrides = options && options.overrides || {};
 
             for (var name in props) {
                 if (name === "constructor") {
@@ -805,7 +1296,7 @@ define('skylark-langx/klass',[
                             };
                         })(name, prop, _super[name]) :
                         prop;
-                } else if (typeof prop == "object" && prop!==null && (prop.get)) {
+                } else if (types.isPlainObject(prop) && prop!==null && (prop.get)) {
                     Object.defineProperty(proto,name,prop);
                 } else {
                     proto[name] = prop;
@@ -1492,6 +1983,69 @@ define('skylark-langx/funcs',[
         };
     })();
 
+  var templateSettings = {
+    evaluate: /<%([\s\S]+?)%>/g,
+    interpolate: /<%=([\s\S]+?)%>/g,
+    escape: /<%-([\s\S]+?)%>/g
+  };
+
+
+  function template(text, settings, oldSettings) {
+    if (!settings && oldSettings) settings = oldSettings;
+    settings = objects.defaults({}, settings,templateSettings);
+
+    // Combine delimiters into one regular expression via alternation.
+    var matcher = RegExp([
+      (settings.escape || noMatch).source,
+      (settings.interpolate || noMatch).source,
+      (settings.evaluate || noMatch).source
+    ].join('|') + '|$', 'g');
+
+    // Compile the template source, escaping string literals appropriately.
+    var index = 0;
+    var source = "__p+='";
+    text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+      source += text.slice(index, offset).replace(escapeRegExp, escapeChar);
+      index = offset + match.length;
+
+      if (escape) {
+        source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+      } else if (interpolate) {
+        source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+      } else if (evaluate) {
+        source += "';\n" + evaluate + "\n__p+='";
+      }
+
+      // Adobe VMs need the match returned to produce the correct offset.
+      return match;
+    });
+    source += "';\n";
+
+    // If a variable is not specified, place data values in local scope.
+    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+
+    source = "var __t,__p='',__j=Array.prototype.join," +
+      "print=function(){__p+=__j.call(arguments,'');};\n" +
+      source + 'return __p;\n';
+
+    var render;
+    try {
+      render = new Function(settings.variable || 'obj', '_', source);
+    } catch (e) {
+      e.source = source;
+      throw e;
+    }
+
+    var template = function(data) {
+      return render.call(this, data, _);
+    };
+
+    // Provide the compiled source as a convenience for precompilation.
+    var argument = settings.variable || 'obj';
+    template.source = 'function(' + argument + '){\n' + source + '}';
+
+    return template;
+  };
 
     return {
         debounce: debounce,
@@ -1510,7 +2064,10 @@ define('skylark-langx/funcs',[
 
         returnFalse: function() {
             return false;
-        }
+        },
+
+        templateSettings : templateSettings,
+        template : template
     };
 });
 define('skylark-langx/Deferred',[
@@ -1520,7 +2077,8 @@ define('skylark-langx/Deferred',[
 ],function(arrays,funcs,objects){
     "use strict";
     
-    var  PGLISTENERS = Symbol ? Symbol() : '__pglisteners';
+    var  PGLISTENERS = Symbol ? Symbol() : '__pglisteners',
+         PGNOTIFIES = Symbol ? Symbol() : '__pgnotifies';
 
     var slice = Array.prototype.slice,
         proxy = funcs.proxy,
@@ -1535,8 +2093,10 @@ define('skylark-langx/Deferred',[
             this.then(handler,handler);
             return this;
         },
-        done : function(handler) {
-            this.then(handler);
+        done : function() {
+            for (var i = 0;i<arguments.length;i++) {
+                this.then(arguments[i]);
+            }
             return this;
         },
         fail : function(handler) { 
@@ -1544,7 +2104,7 @@ define('skylark-langx/Deferred',[
             //return this.then(null,handler);
             this.catch(handler);
             return this;
-        }
+         }
     });
 
 
@@ -1558,6 +2118,7 @@ define('skylark-langx/Deferred',[
         wrapPromise(p,self);
 
         this[PGLISTENERS] = [];
+        this[PGNOTIFIES] = [];
 
         //this.resolve = Deferred.prototype.resolve.bind(this);
         //this.reject = Deferred.prototype.reject.bind(this);
@@ -1580,7 +2141,7 @@ define('skylark-langx/Deferred',[
                     if (onProgress) {
                         this.progress(onProgress);
                     }
-                    return mixin(Promise.prototype.then.call(this,
+                    return wrapPromise(Promise.prototype.then.call(this,
                             onResolved && function(args) {
                                 if (args && args.__ctx__ !== undefined) {
                                     return onResolved.apply(args.__ctx__,args);
@@ -1594,9 +2155,12 @@ define('skylark-langx/Deferred',[
                                 } else {
                                     return onRejected(args);
                                 }
-                            }),added);
+                            }));
                 },
                 progress : function(handler) {
+                    d[PGNOTIFIES].forEach(function (value) {
+                        handler(value);
+                    });
                     d[PGLISTENERS].push(handler);
                     return this;
                 }
@@ -1621,11 +2185,13 @@ define('skylark-langx/Deferred',[
         return this;
     };
 
-    Deferred.prototype.progress = function(value) {
+    Deferred.prototype.notify = function(value) {
         try {
-          return this[PGLISTENERS].forEach(function (listener) {
-            return listener(value);
-          });
+            this[PGNOTIFIES].push(value);
+
+            return this[PGLISTENERS].forEach(function (listener) {
+                return listener(value);
+            });
         } catch (error) {
           this.reject(error);
         }
@@ -1658,10 +2224,33 @@ define('skylark-langx/Deferred',[
         return p.then(callback, errback, progback);
     };
 
-    Deferred.prototype.done  = Deferred.prototype.then;
+    Deferred.prototype.progress = function(progback){
+        var p = result(this,"promise");
+        return p.progress(progback);
+    };
+   
+    Deferred.prototype.catch = function(errback) {
+        var p = result(this,"promise");
+        return p.catch(errback);
+    };
+
+
+    Deferred.prototype.done  = function() {
+        var p = result(this,"promise");
+        return p.done.apply(p,arguments);
+    };
+
+    Deferred.prototype.fail = function(errback) {
+        var p = result(this,"promise");
+        return p.fail(errback);
+    };
+
 
     Deferred.all = function(array) {
-        return wrapPromise(Promise.all(array));
+        //return wrapPromise(Promise.all(array));
+        var d = new Deferred();
+        Promise.all(array).then(d.resolve.bind(d),d.reject.bind(d));
+        return result(d,"promise");
     };
 
     Deferred.first = function(array) {
@@ -1681,7 +2270,7 @@ define('skylark-langx/Deferred',[
             }
         } else if (!nativePromise) {
             var deferred = new Deferred(valueOrPromise.cancel);
-            valueOrPromise.then(proxy(deferred.resolve,deferred), proxy(deferred.reject,deferred), deferred.progress);
+            valueOrPromise.then(proxy(deferred.resolve,deferred), proxy(deferred.reject,deferred), deferred.notify);
             valueOrPromise = deferred.promise;
         }
 
@@ -1709,9 +2298,9 @@ define('skylark-langx/Deferred',[
 });
 define('skylark-langx/async',[
     "./Deferred",
-    "./arrays"
-],function(Deferred,arrays){
-    var each = arrays.each;
+    "./objects"
+],function(Deferred,objects){
+    var each = objects.each;
     
     var async = {
         parallel : function(arr,args,ctx) {
@@ -1763,18 +2352,91 @@ define('skylark-langx/async',[
 
 	return async;	
 });
+define('skylark-langx/datetimes',[],function(){
+     function parseMilliSeconds(str) {
+
+        var strs = str.split(' ');
+        var number = parseInt(strs[0]);
+
+        if (isNaN(number)){
+            return 0;
+        }
+
+        var min = 60000 * 60;
+
+        switch (strs[1].trim().replace(/\./g, '')) {
+            case 'minutes':
+            case 'minute':
+            case 'min':
+            case 'mm':
+            case 'm':
+                return 60000 * number;
+            case 'hours':
+            case 'hour':
+            case 'HH':
+            case 'hh':
+            case 'h':
+            case 'H':
+                return min * number;
+            case 'seconds':
+            case 'second':
+            case 'sec':
+            case 'ss':
+            case 's':
+                return 1000 * number;
+            case 'days':
+            case 'day':
+            case 'DD':
+            case 'dd':
+            case 'd':
+                return (min * 24) * number;
+            case 'months':
+            case 'month':
+            case 'MM':
+            case 'M':
+                return (min * 24 * 28) * number;
+            case 'weeks':
+            case 'week':
+            case 'W':
+            case 'w':
+                return (min * 24 * 7) * number;
+            case 'years':
+            case 'year':
+            case 'yyyy':
+            case 'yy':
+            case 'y':
+                return (min * 24 * 365) * number;
+            default:
+                return 0;
+        }
+    };
+	
+	return {
+		parseMilliSeconds
+	};
+});
 define('skylark-langx/Evented',[
     "./klass",
+    "./arrays",
     "./objects",
-	"./types"
-],function(klass,objects,types){
-	var slice = Array.prototype.slice,
+    "./types"
+],function(klass,arrays,objects,types){
+    var slice = Array.prototype.slice,
+        compact = arrays.compact,
         isDefined = types.isDefined,
         isPlainObject = types.isPlainObject,
-		isFunction = types.isFunction,
-		isString = types.isString,
-		isEmptyObject = types.isEmptyObject,
-		mixin = objects.mixin;
+        isFunction = types.isFunction,
+        isString = types.isString,
+        isEmptyObject = types.isEmptyObject,
+        mixin = objects.mixin;
+
+    function parse(event) {
+        var segs = ("" + event).split(".");
+        return {
+            name: segs[0],
+            ns: segs.slice(1).join(" ")
+        };
+    }
 
     var Evented = klass({
         on: function(events, selector, data, callback, ctx, /*used internally*/ one) {
@@ -1806,12 +2468,17 @@ define('skylark-langx/Evented',[
                 events = events.split(/\s/)
             }
 
-            events.forEach(function(name) {
+            events.forEach(function(event) {
+                var parsed = parse(event),
+                    name = parsed.name,
+                    ns = parsed.ns;
+
                 (_hub[name] || (_hub[name] = [])).push({
                     fn: callback,
                     selector: selector,
                     data: data,
                     ctx: ctx,
+                    ns : ns,
                     one: one
                 });
             });
@@ -1845,7 +2512,11 @@ define('skylark-langx/Evented',[
                 args = [e];
             }
             [e.type || e.name, "all"].forEach(function(eventName) {
-                var listeners = self._hub[eventName];
+                var parsed = parse(eventName),
+                    name = parsed.name,
+                    ns = parsed.ns;
+
+                var listeners = self._hub[name];
                 if (!listeners) {
                     return;
                 }
@@ -1855,6 +2526,9 @@ define('skylark-langx/Evented',[
 
                 for (var i = 0; i < len; i++) {
                     var listener = listeners[i];
+                    if (ns && (!listener.ns ||  !listener.ns.startsWith(ns))) {
+                        continue;
+                    }
                     if (e.data) {
                         if (listener.data) {
                             e.data = mixin({}, listener.data, e.data);
@@ -1935,21 +2609,37 @@ define('skylark-langx/Evented',[
                 events = events.split(/\s/)
             }
 
-            events.forEach(function(name) {
+            events.forEach(function(event) {
+                var parsed = parse(event),
+                    name = parsed.name,
+                    ns = parsed.ns;
+
                 var evts = _hub[name];
-                var liveEvents = [];
 
-                if (evts && callback) {
-                    for (var i = 0, len = evts.length; i < len; i++) {
-                        if (evts[i].fn !== callback && evts[i].fn._ !== callback)
-                            liveEvents.push(evts[i]);
+                if (evts) {
+                    var liveEvents = [];
+
+                    if (callback || ns) {
+                        for (var i = 0, len = evts.length; i < len; i++) {
+                            
+                            if (callback && evts[i].fn !== callback && evts[i].fn._ !== callback) {
+                                liveEvents.push(evts[i]);
+                                continue;
+                            } 
+
+                            if (ns && (!evts[i].ns || evts[i].ns.indexOf(ns)!=0)) {
+                                liveEvents.push(evts[i]);
+                                continue;
+                            }
+                        }
                     }
-                }
 
-                if (liveEvents.length) {
-                    _hub[name] = liveEvents;
-                } else {
-                    delete _hub[name];
+                    if (liveEvents.length) {
+                        _hub[name] = liveEvents;
+                    } else {
+                        delete _hub[name];
+                    }
+
                 }
             });
 
@@ -2004,8 +2694,88 @@ define('skylark-langx/Evented',[
         }
     });
 
-	return Evented;
+    return Evented;
 
+});
+define('skylark-langx/hoster',[
+],function(){
+	// The javascript host environment, brower and nodejs are supported.
+	var hoster = {
+		"isBrowser" : true, // default
+		"isNode" : null,
+		"global" : this,
+		"browser" : null,
+		"node" : null
+	};
+
+	if (typeof process == "object" && process.versions && process.versions.node && process.versions.v8) {
+		hoster.isNode = true;
+		hoster.isBrowser = false;
+	}
+
+	hoster.global = (function(){
+		if (typeof global !== 'undefined' && typeof global !== 'function') {
+			// global spec defines a reference to the global object called 'global'
+			// https://github.com/tc39/proposal-global
+			// `global` is also defined in NodeJS
+			return global;
+		} else if (typeof window !== 'undefined') {
+			// window is defined in browsers
+			return window;
+		}
+		else if (typeof self !== 'undefined') {
+			// self is defined in WebWorkers
+			return self;
+		}
+		return this;
+	})();
+
+	var _document = null;
+
+	Object.defineProperty(hoster,"document",function(){
+		if (!_document) {
+			var w = typeof window === 'undefined' ? require('html-element') : window;
+			_document = w.document;
+		}
+
+		return _document;
+	});
+
+	if (hoster.isBrowser) {
+	    function uaMatch( ua ) {
+		    ua = ua.toLowerCase();
+
+		    var match = /(chrome)[ \/]([\w.]+)/.exec( ua ) ||
+		      /(webkit)[ \/]([\w.]+)/.exec( ua ) ||
+		      /(opera)(?:.*version|)[ \/]([\w.]+)/.exec( ua ) ||
+		      /(msie) ([\w.]+)/.exec( ua ) ||
+		      ua.indexOf('compatible') < 0 && /(mozilla)(?:.*? rv:([\w.]+)|)/.exec( ua ) ||
+		      [];
+
+		    return {
+		      browser: match[ 1 ] || '',
+		      version: match[ 2 ] || '0'
+		    };
+	  	};
+
+	    var matched = uaMatch( navigator.userAgent );
+
+	    var browser = hoster.browser = {};
+
+	    if ( matched.browser ) {
+	      browser[ matched.browser ] = true;
+	      browser.version = matched.version;
+	    }
+
+	    // Chrome is Webkit, but Webkit is also Safari.
+	    if ( browser.chrome ) {
+	      browser.webkit = true;
+	    } else if ( browser.webkit ) {
+	      browser.safari = true;
+	    }
+	}
+
+	return  hoster;
 });
 define('skylark-langx/strings',[
 ],function(){
@@ -2037,6 +2807,7 @@ define('skylark-langx/strings',[
             return value;
         }
     }
+
 
     function trim(str) {
         return str == null ? "" : String.prototype.trim.call(str);
@@ -2094,13 +2865,18 @@ define('skylark-langx/strings',[
             }); // String
     }
 
+    var idCounter = 0;
+    function uniqueId (prefix) {
+        var id = ++idCounter + '';
+        return prefix ? prefix + id : id;
+    }
+
 	return {
         camelCase: function(str) {
             return str.replace(/-([\da-z])/g, function(a) {
                 return a.toUpperCase().replace('-', '');
             });
         },
-
 
         dasherize: dasherize,
 
@@ -2119,6 +2895,8 @@ define('skylark-langx/strings',[
 
         trim: trim,
 
+        uniqueId: uniqueId,
+
         upperFirst: function(str) {
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
@@ -2133,7 +2911,7 @@ define('skylark-langx/Xhr',[
     "./funcs",
     "./types"
 ],function(arrays,Deferred,Evented,objects,funcs,types){
-    var each = arrays.each,
+    var each = objects.each,
         mixin = objects.mixin,
         noop = funcs.noop,
         isArray = types.isArray,
@@ -2364,7 +3142,7 @@ define('skylark-langx/Xhr',[
 
                 var onprogress = function(evt) {
                     if (deferred) {
-                        deferred.progress(evt,xhr.status,xhr);
+                        deferred.notify(evt,xhr.status,xhr);
                     }
                 }
 
@@ -2604,10 +3382,19 @@ define('skylark-langx/Restful',[
     return Restful;
 });
 define('skylark-langx/Stateful',[
-	"./Evented"
-],function(Evented){
+	"./Evented",
+  "./strings",
+  "./objects"
+],function(Evented,strings,objects){
+    var isEqual = objects.isEqual,
+        mixin = objects.mixin,
+        result = objects.result,
+        isEmptyObject = objects.isEmptyObject,
+        clone = objects.clone,
+        uniqueId = strings.uniqueId;
+
     var Stateful = Evented.inherit({
-        init : function(attributes, options) {
+        _construct : function(attributes, options) {
             var attrs = attributes || {};
             options || (options = {});
             this.cid = uniqueId(this.cidPrefix);
@@ -2806,23 +3593,57 @@ define('skylark-langx/Stateful',[
 
 	return Stateful;
 });
+define('skylark-langx/topic',[
+	"./Evented"
+],function(Evented){
+	var hub = new Evented();
+
+	return {
+	    publish: function(name, arg1,argn) {
+	        var data = [].slice.call(arguments, 1);
+
+	        return hub.trigger({
+	            type : name,
+	            data : data
+	        });
+	    },
+
+        subscribe: function(name, listener,ctx) {
+        	var handler = function(e){
+                listener.apply(ctx,e.data);
+            };
+            hub.on(name, handler);
+            return {
+            	remove : function(){
+            		hub.off(name,handler);
+            	}
+            }
+
+        }
+
+	}
+});
 define('skylark-langx/langx',[
     "./skylark",
     "./arrays",
     "./ArrayStore",
     "./aspect",
     "./async",
+    "./datetimes",
     "./Deferred",
     "./Evented",
     "./funcs",
+    "./hoster",
     "./klass",
+    "./numbers",
     "./objects",
     "./Restful",
     "./Stateful",
     "./strings",
+    "./topic",
     "./types",
     "./Xhr"
-], function(skylark,arrays,ArrayStore,aspect,async,Deferred,Evented,funcs,klass,objects,Restful,Stateful,strings,types,Xhr) {
+], function(skylark,arrays,ArrayStore,aspect,async,datetimes,Deferred,Evented,funcs,hoster,klass,numbers,objects,Restful,Stateful,strings,topic,types,Xhr) {
     "use strict";
     var toString = {}.toString,
         concat = Array.prototype.concat,
@@ -2873,13 +3694,6 @@ define('skylark-langx/langx',[
         return obj._uid || (obj._uid = _uid++);
     }
 
-    var idCounter = 0;
-    function uniqueId (prefix) {
-        var id = ++idCounter + '';
-        return prefix ? prefix + id : id;
-    }
-
-
     function langx() {
         return langx;
     }
@@ -2895,14 +3709,12 @@ define('skylark-langx/langx',[
 
         uid: uid,
 
-        uniqueId: uniqueId,
-
         URL: typeof window !== "undefined" ? window.URL || window.webkitURL : null
 
     });
 
 
-    mixin(langx, arrays,aspect,funcs,objects,strings,types,{
+    mixin(langx, arrays,aspect,datetimes,funcs,numbers,objects,strings,types,{
         ArrayStore : ArrayStore,
 
         async : async,
@@ -2911,11 +3723,15 @@ define('skylark-langx/langx',[
 
         Evented: Evented,
 
+        hoster : hoster,
+
         klass : klass,
 
         Restful: Restful,
         
         Stateful: Stateful,
+
+        topic : topic,
 
         Xhr: Xhr
 
@@ -2934,6 +3750,8 @@ define('skylark-utils-dom/browser',[
     "./langx"
 ], function(dom,langx) {
     "use strict";
+
+    var browser = langx.hoster.browser;
  
     var checkedCssProperties = {
             "transitionproperty": "TransitionProperty",
@@ -3016,10 +3834,6 @@ define('skylark-utils-dom/browser',[
 
     function normalizeStyleProperty(name) {
         return cssStyles[name] || name;
-    }
-
-    function browser() {
-        return browser;
     }
 
     langx.mixin(browser, {
@@ -3122,7 +3936,7 @@ define('skylark-utils-dom/styler',[
         if (!elementDisplay[nodeName]) {
             element = document.createElement(nodeName)
             document.body.appendChild(element)
-            display = getComputedStyle(element, '').getPropertyValue("display")
+            display = getStyles(element).getPropertyValue("display")
             element.parentNode.removeChild(element)
             display == "none" && (display = "block")
             elementDisplay[nodeName] = display
@@ -3179,6 +3993,22 @@ define('skylark-utils-dom/styler',[
 
         return this;
     }
+
+    function getStyles( elem ) {
+
+        // Support: IE <=11 only, Firefox <=30 (#15098, #14150)
+        // IE throws on elements created in popups
+        // FF meanwhile throws on frame elements through "defaultView.getComputedStyle"
+        var view = elem.ownerDocument.defaultView;
+
+        if ( !view || !view.opener ) {
+            view = window;
+        }
+
+        return view.getComputedStyle( elem);
+    }
+
+
     /*
      * Get the value of a computed style property for the first element in the set of matched elements or set one or more CSS properties for every matched element.
      * @param {HTMLElement} elm
@@ -3188,7 +4018,7 @@ define('skylark-utils-dom/styler',[
     function css(elm, property, value) {
         if (arguments.length < 3) {
             var computedStyle,
-                computedStyle = getComputedStyle(elm, '')
+                computedStyle = getStyles(elm)
             if (langx.isString(property)) {
                 return elm.style[camelCase(property)] || computedStyle.getPropertyValue(dasherize(property))
             } else if (langx.isArrayLike(property)) {
@@ -3657,14 +4487,20 @@ define('skylark-utils-dom/noder',[
     }
 
     /*   
-     * Check to see if a dom node is a descendant of another dom node.
+     * Check to see if a dom node is a document.
      * @param {Node} node
-     * @param {Node} parent
-     * @param {Node} directly
      */
-    function isDoc(node) {
+    function isDocument(node) {
         return node != null && node.nodeType == node.DOCUMENT_NODE
     }
+
+    /*   
+     * Check to see if a dom node is in the document
+     * @param {Node} node
+     */
+    function isInDocument(node) {
+      return (node === document.body) ? true : document.body.contains(node);
+    }        
 
     /*   
      * Get the owner document object for the specified element.
@@ -3811,15 +4647,15 @@ define('skylark-utils-dom/noder',[
             time = params.time,
             callback = params.callback,
             timer,
+
             throbber = this.createElement("div", {
-                className: params.className || "throbber",
-                style: style
+                "class": params.className || "throbber"
             }),
             _overlay = overlay(throbber, {
-                className: 'overlay fade'
+                "class": 'overlay fade'
             }),
             throb = this.createElement("div", {
-                className: "throb"
+                "class": "throb"
             }),
             textNode = this.createTextNode(text || ""),
             remove = function() {
@@ -3837,6 +4673,9 @@ define('skylark-utils-dom/noder',[
                     textNode.nodeValue = params.text;
                 }
             };
+        if (params.style) {
+            styler.css(throbber,params.style);
+        }
         throb.appendChild(textNode);
         throbber.appendChild(throb);
         elm.appendChild(throbber);
@@ -3959,7 +4798,9 @@ define('skylark-utils-dom/noder',[
 
         isChildOf: isChildOf,
 
-        isDoc: isDoc,
+        isDocument: isDocument,
+
+        isInDocument: isInDocument,
 
         isWindow: langx.isWindow,
 
@@ -4748,17 +5589,20 @@ define('skylark-utils-dom/finder',[
         var ret = [],
             rootIsSelector = root && langx.isString(root);
         while ((node = node.parentNode) && (node.nodeType !== 9)) {
-            ret.push(node);
             if (root) {
                 if (rootIsSelector) {
                     if (matches(node, root)) {
+                        break;
+                    }
+                } else if (langx.isArrayLike(root)) {
+                    if (langx.inArray(node,root)>-1) {
                         break;
                     }
                 } else if (node == root) {
                     break;
                 }
             }
-
+            ret.push(node); // TODO
         }
 
         if (selector) {
@@ -5264,13 +6108,17 @@ define('skylark-utils-dom/datax',[
      * @param {Array} names
      */
     function removeData(elm, names) {
-        if (langx.isString(names)) {
-            names = names.split(/\s+/);
+        if (names) {
+            if (langx.isString(names)) {
+                names = names.split(/\s+/);
+            }
+            var store = _store(elm, true);
+            names.forEach(function(name) {
+                delete store[name];
+            });            
+        } else {
+            cleanData(elm);
         }
-        var store = _store(elm, true);
-        names.forEach(function(name) {
-            delete store[name];
-        });
         return this;
     }
 
@@ -6547,6 +7395,9 @@ define('skylark-utils-dom/geom',[
      * @param {Number} value
      */
     function scrollLeft(elm, value) {
+        if (elm.nodeType === 9) {
+            elm = elm.defaultView;
+        }
         var hasScrollLeft = "scrollLeft" in elm;
         if (value === undefined) {
             return hasScrollLeft ? elm.scrollLeft : elm.pageXOffset
@@ -6565,6 +7416,9 @@ define('skylark-utils-dom/geom',[
      * @param {Number} value
      */
     function scrollTop(elm, value) {
+        if (elm.nodeType === 9) {
+            elm = elm.defaultView;
+        }
         var hasScrollTop = "scrollTop" in elm;
 
         if (value === undefined) {
@@ -7750,9 +8604,9 @@ define('skylark-utils-dom/query',[
                 params = slice.call(arguments);
             var result = this.map(function(idx, elem) {
                 // if (elem.nodeType == 1) {
-                if (elem.querySelector) {
+                //if (elem.querySelector) {
                     return func.apply(context, last ? [elem] : [elem, selector]);
-                }
+                //}
             });
             if (last && selector) {
                 return result.filter(selector);
@@ -7766,15 +8620,15 @@ define('skylark-utils-dom/query',[
         return function(util, selector) {
             var self = this,
                 params = slice.call(arguments);
-            if (selector === undefined) {
-                selector = util;
-                util = undefined;
-            }
+            //if (selector === undefined) { //TODO : needs confirm?
+            //    selector = util;
+            //    util = undefined;
+            //}
             var result = this.map(function(idx, elem) {
-                // if (elem.nodeType == 1) {
-                if (elem.querySelector) {
+                // if (elem.nodeType == 1) { // TODO
+                //if (elem.querySelector) {
                     return func.apply(context, last ? [elem, util] : [elem, selector, util]);
-                }
+                //}
             });
             if (last && selector) {
                 return result.filter(selector);
@@ -7789,7 +8643,7 @@ define('skylark-utils-dom/query',[
         return function() {
             var self = this,
                 params = slice.call(arguments);
-            this.each(function(idx) {
+            this.each(function(idx,node) {
                 func.apply(context, [this].concat(params));
             });
             return self;
@@ -7913,7 +8767,7 @@ define('skylark-utils-dom/query',[
                         nodes = finder.descendants(context, selector);
                     }
                 } else {
-                    if (isArray(selector)) {
+                    if (selector !== window && isArrayLike(selector)) {
                         // a dom node array is expected
                         nodes = selector;
                     } else {
@@ -8049,8 +8903,8 @@ define('skylark-utils-dom/query',[
             not: function(selector) {
                 var nodes = []
                 if (isFunction(selector) && selector.call !== undefined)
-                    this.each(function(idx) {
-                        if (!selector.call(this, idx)) nodes.push(this)
+                    this.each(function(idx,node) {
+                        if (!selector.call(this, idx,node)) nodes.push(this)
                     })
                 else {
                     var excludes = typeof selector == 'string' ? this.filter(selector) :
@@ -8133,9 +8987,9 @@ define('skylark-utils-dom/query',[
                     var dom = $(structure).get(0),
                         clone = dom.parentNode || this.length > 1
 
-                return this.each(function(index) {
+                return this.each(function(index,node) {
                     $(this).wrapAll(
-                        func ? structure.call(this, index) :
+                        func ? structure.call(this, index,node) :
                         clone ? dom.cloneNode(true) : dom
                     )
                 })
@@ -8156,10 +9010,10 @@ define('skylark-utils-dom/query',[
 
             wrapInner: function(wrappingElement) {
                 var func = isFunction(wrappingElement)
-                return this.each(function(index) {
+                return this.each(function(index,node) {
                     var self = $(this),
                         contents = self.contents(),
-                        dom = func ? wrappingElement.call(this, index) : wrappingElement
+                        dom = func ? wrappingElement.call(this, index,node) : wrappingElement
                     contents.length ? contents.wrapAll(dom) : self.append(dom)
                 })
             },
@@ -8197,7 +9051,7 @@ define('skylark-utils-dom/query',[
                 return $(this.pluck('previousElementSibling')).filter(selector || '*')
             },
 
-            prevAll: wrapper_selector(finder.previousSibling, finder),
+            prevAll: wrapper_selector(finder.previousSiblings, finder),
 
             next: function(selector) {
                 return $(this.pluck('nextElementSibling')).filter(selector || '*')
@@ -8519,7 +9373,7 @@ define('skylark-utils-dom/query',[
             }
         }
 
-        'filter,add,not,eq,first,last,find,closest,parents,parent,children,siblings'.split(',').forEach(function(property) {
+        'filter,add,not,eq,first,last,find,closest,parents,parent,children,siblings,prev,prevAll,next,nextAll'.split(',').forEach(function(property) {
             var fn = $.fn[property]
             $.fn[property] = function() {
                 var ret = fn.apply(this, arguments)
@@ -8655,9 +9509,15 @@ define('skylark-utils-dom/elmx',[
     var VisualElement = langx.klass({
         klassName: "VisualElement",
 
-        "init": function(node) {
+        "_construct": function(node) {
             if (langx.isString(node)) {
-                node = document.getElementById(node);
+                if (node.charAt(0) === "<") {
+                    //html
+                    node = noder.createFragment(node)[0];
+                } else {
+                    // id
+                    node = document.getElementById(node);
+                }
             }
             this._elm = node;
         }
@@ -8665,6 +9525,10 @@ define('skylark-utils-dom/elmx',[
 
     VisualElement.prototype.$ = VisualElement.prototype.query = function(selector) {
         return $(selector,this._elm);
+    };
+
+    VisualElement.prototype.elm = function() {
+        return this._elm;
     };
 
     /*
@@ -8843,6 +9707,9 @@ define('skylark-utils-dom/elmx',[
         "empty",
         "html",
         "isChildOf",
+        "isDocument",
+        "isInDocument",
+        "isWindow",
         "ownerDoc",
         "prepend",
         "remove",
@@ -8932,7 +9799,15 @@ define('skylark-utils-dom/plugins',[
      * Create or get or destory a plugin instance assocated with the element.
      */
     function instantiate(elm,pluginName,options) {
-        var pluginInstance = datax.data( elm, pluginName );
+        var pair = pluginName.split(":"),
+            instanceDataName = pair[1];
+        pluginName = pair[0];
+
+        if (!instanceDataName) {
+            instanceDataName = pluginName;
+        }
+
+        var pluginInstance = datax.data( elm, instanceDataName );
 
         if (options === "instance") {
             return pluginInstance;
@@ -8950,7 +9825,7 @@ define('skylark-utils-dom/plugins',[
                 }
                 var pluginKlass = pluginKlasses[pluginName]; 
                 pluginInstance = new pluginKlass(elm,options);
-                datax.data( elm, pluginName,pluginInstance );
+                datax.data( elm, instanceDataName,pluginInstance );
             } else if (options) {
                 pluginInstance.reset(options);
             }
@@ -8974,7 +9849,7 @@ define('skylark-utils-dom/plugins',[
             }
 
             if (options) {
-                var args = slice.call(arguments,1);
+                var args = slice.call(arguments,1); //2
                 if (extfn) {
                     return extfn.apply(plugin,args);
                 } else {
@@ -8992,7 +9867,7 @@ define('skylark-utils-dom/plugins',[
                                 " plugin instance" );
                         }
 
-                        plugin[methodName].apply(plugin,args);
+                        return plugin[methodName].apply(plugin,args);
                     }                
                 }                
             }
@@ -9004,12 +9879,20 @@ define('skylark-utils-dom/plugins',[
     /*
      * Register a plugin type
      */
-    function register( pluginKlass,shortcutName,extfn) {
+    function register( pluginKlass,shortcutName,instanceDataName,extfn) {
         var pluginName = pluginKlass.prototype.pluginName;
         
         pluginKlasses[pluginName] = pluginKlass;
 
         if (shortcutName) {
+            if (instanceDataName && langx.isFunction(instanceDataName)) {
+                extfn = instanceDataName;
+                instanceDataName = null;
+            } 
+            if (instanceDataName) {
+                pluginName = pluginName + ":" + instanceDataName;
+            }
+
             var shortcut = shortcuts[shortcutName] = shortcutter(pluginName,extfn);
                 
             $.fn[shortcutName] = function(options) {
@@ -9018,8 +9901,11 @@ define('skylark-utils-dom/plugins',[
                 if ( !this.length && options === "instance" ) {
                   returnValue = undefined;
                 } else {
+                  var args = slice.call(arguments);
                   this.each(function () {
-                    var  ret  = shortcut(this,options);
+                    var args2 = slice.call(args);
+                    args2.unshift(this);
+                    var  ret  = shortcut.apply(null,args2);
                     if (ret !== undefined) {
                         returnValue = ret;
                         return false;
@@ -9161,6 +10047,10 @@ define('skylark-utils-dom/plugins',[
             this.options[ key ] = value;
 
             return this;
+        },
+
+        elm : function() {
+            return this._elm;
         }
 
     });
@@ -9247,7 +10137,7 @@ define('skylark-bootstrap4/util',[
 
     function setTransitionEndSupport() {
         $.fn.emulateTransitionEnd = transitionEndEmulator;
-        $.event.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
+        eventer.create.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
     }
     */
     const Util = {
@@ -9339,10 +10229,11 @@ define('skylark-bootstrap4/util',[
 });
 define('skylark-bootstrap4/alert',[
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function ($, plugins,bs4,Util) {
+], function ($, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'alert';
@@ -9396,7 +10287,7 @@ define('skylark-bootstrap4/alert',[
             return parent;
         }
         _triggerCloseEvent(element) {
-            const closeEvent = $.Event(Event.CLOSE);
+            const closeEvent = eventer.create(Event.CLOSE);
             $(element).trigger(closeEvent);
             return closeEvent;
         }
@@ -9557,10 +10448,11 @@ define('skylark-bootstrap4/button',[
 define('skylark-bootstrap4/carousel',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'carousel';
@@ -9835,7 +10727,7 @@ define('skylark-bootstrap4/carousel',[
         _triggerSlideEvent(relatedTarget, eventDirectionName) {
             const targetIndex = this._getItemIndex(relatedTarget);
             const fromIndex = this._getItemIndex(this._element.querySelector(Selector.ACTIVE_ITEM));
-            const slideEvent = $.Event(Event.SLIDE, {
+            const slideEvent = eventer.create(Event.SLIDE, {
                 relatedTarget,
                 direction: eventDirectionName,
                 from: fromIndex,
@@ -9888,7 +10780,7 @@ define('skylark-bootstrap4/carousel',[
                 this.pause();
             }
             this._setActiveIndicatorElement(nextElement);
-            const slidEvent = $.Event(Event.SLID, {
+            const slidEvent = eventer.create(Event.SLID, {
                 relatedTarget: nextElement,
                 direction: eventDirectionName,
                 from: activeElementIndex,
@@ -10000,10 +10892,11 @@ define('skylark-bootstrap4/carousel',[
 define('skylark-bootstrap4/collapse',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer, plugins,bs4,Util) {
 
     'use strict';
     const NAME = 'collapse';
@@ -10101,7 +10994,7 @@ define('skylark-bootstrap4/collapse',[
                     return;
                 }
             }
-            const startEvent = $.Event(Event.SHOW);
+            const startEvent = eventer.create(Event.SHOW);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;
@@ -10135,7 +11028,7 @@ define('skylark-bootstrap4/collapse',[
             if (this._isTransitioning || !$(this._element).hasClass(ClassName.SHOW)) {
                 return;
             }
-            const startEvent = $.Event(Event.HIDE);
+            const startEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(startEvent);
             if (startEvent.isDefaultPrevented()) {
                 return;
@@ -12818,7 +13711,7 @@ define('skylark-ui-popper/Popper',[
   Popper.Defaults = Defaults;
 
 
-  skylark.ui = skyalrk.ui || {};
+  skylark.ui = skylark.ui || {};
 
   return skylark.ui.Popper = Popper;
 
@@ -12828,11 +13721,12 @@ define('skylark-ui-popper/Popper',[
 define('skylark-bootstrap4/dropdown',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'dropdown';
     const VERSION = '4.1.3';
@@ -12927,7 +13821,7 @@ define('skylark-bootstrap4/dropdown',[
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
@@ -12956,35 +13850,35 @@ define('skylark-bootstrap4/dropdown',[
             this._element.focus();
             this._element.setAttribute('aria-expanded', true);
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         show() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || $(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         hide() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || !$(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const hideEvent = $.Event(Event.HIDE, relatedTarget);
+            const hideEvent = eventer.create(Event.HIDE, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(hideEvent);
             if (hideEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
         }
         dispose() {
             $.removeData(this._element, DATA_KEY);
@@ -13113,7 +14007,7 @@ define('skylark-bootstrap4/dropdown',[
                 if (event && (event.type === 'click' && /input|textarea/i.test(event.target.tagName) || event.type === 'keyup' && event.which === TAB_KEYCODE) && $.contains(parent, event.target)) {
                     continue;
                 }
-                const hideEvent = $.Event(Event.HIDE, relatedTarget);
+                const hideEvent = eventer.create(Event.HIDE, relatedTarget);
                 $(parent).trigger(hideEvent);
                 if (hideEvent.isDefaultPrevented()) {
                     continue;
@@ -13123,7 +14017,7 @@ define('skylark-bootstrap4/dropdown',[
                 }
                 toggles[i].setAttribute('aria-expanded', 'false');
                 $(dropdownMenu).removeClass(ClassName.SHOW);
-                $(parent).removeClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+                $(parent).removeClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
             }
         }
         static _getParentFromElement(element) {
@@ -13188,10 +14082,12 @@ define('skylark-bootstrap4/dropdown',[
 define('skylark-bootstrap4/modal',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     './util'
-], function (langx,$, plugins,bs4,Util) {
+], function (langx,$, eventer,plugins,bs4,Util) {
+
 
     'use strict';
     const NAME = 'modal';
@@ -13268,7 +14164,7 @@ define('skylark-bootstrap4/modal',[
             if ($(this._element).hasClass(ClassName.FADE)) {
                 this._isTransitioning = true;
             }
-            const showEvent = $.Event(Event.SHOW, { relatedTarget });
+            const showEvent = eventer.create(Event.SHOW, { relatedTarget });
             $(this._element).trigger(showEvent);
             if (this._isShown || showEvent.isDefaultPrevented()) {
                 return;
@@ -13296,7 +14192,7 @@ define('skylark-bootstrap4/modal',[
             if (!this._isShown || this._isTransitioning) {
                 return;
             }
-            const hideEvent = $.Event(Event.HIDE);
+            const hideEvent = eventer.create(Event.HIDE);
             $(this._element).trigger(hideEvent);
             if (!this._isShown || hideEvent.isDefaultPrevented()) {
                 return;
@@ -13366,7 +14262,7 @@ define('skylark-bootstrap4/modal',[
             if (this._config.focus) {
                 this._enforceFocus();
             }
-            const shownEvent = $.Event(Event.SHOWN, { relatedTarget });
+            const shownEvent = eventer.create(Event.SHOWN, { relatedTarget });
             const transitionComplete = () => {
                 if (this._config.focus) {
                     this._element.focus();
@@ -13604,11 +14500,12 @@ define('skylark-bootstrap4/modal',[
 define('skylark-bootstrap4/tooltip',[
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'tooltip';
     const VERSION = '4.1.3';
@@ -13777,7 +14674,7 @@ define('skylark-bootstrap4/tooltip',[
             if ($(this.element).css('display') === 'none') {
                 throw new Error('Please use show on visible elements');
             }
-            const showEvent = $.Event(this.constructor.Event.SHOW);
+            const showEvent = eventer.create(this.constructor.Event.SHOW);
             if (this.isWithContent() && this._isEnabled) {
                 $(this.element).trigger(showEvent);
                 const shadowRoot = Util.findShadowRoot(this.element);
@@ -13842,7 +14739,7 @@ define('skylark-bootstrap4/tooltip',[
         }
         hide(callback) {
             const tip = this.getTipElement();
-            const hideEvent = $.Event(this.constructor.Event.HIDE);
+            const hideEvent = eventer.create(this.constructor.Event.HIDE);
             const complete = () => {
                 if (this._hoverState !== HoverState.SHOW && tip.parentNode) {
                     tip.parentNode.removeChild(tip);
@@ -14542,8 +15439,8 @@ define('skylark-bootstrap4/tab',[
             }
             this._activate(this._element, listElement);
             const complete = () => {
-                const hiddenEvent = $.Event(Event.HIDDEN, { relatedTarget: this._element });
-                const shownEvent = $.Event(Event.SHOWN, { relatedTarget: previous });
+                const hiddenEvent = eventer.create(Event.HIDDEN, { relatedTarget: this._element });
+                const shownEvent = eventer.create(Event.SHOWN, { relatedTarget: previous });
                 $(previous).trigger(hiddenEvent);
                 $(this._element).trigger(shownEvent);
             };

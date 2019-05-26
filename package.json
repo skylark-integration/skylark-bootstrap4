@@ -22,8 +22,8 @@
   "license": "MIT",
   "dependencies": {
     "skylark-langx": "git+https://github.com/skylarklangx/skylark-langx.git#master",
-    "skylark-utils-dom": "git+https://github.com/skylarkutils/skylark-utils-dom.git#master",
-    "skylark-ui-popper": "git+https://github.com/skylarkui/skylark-ui-popper.git#master"
+    "skylark-ui-popper": "git+https://github.com/skylarkui/skylark-ui-popper.git#master",
+    "skylark-utils-dom": "git+https://github.com/skylarkutils/skylark-utils-dom.git#master"
   },
   "engines": {
     "node": ">=0.10.1"

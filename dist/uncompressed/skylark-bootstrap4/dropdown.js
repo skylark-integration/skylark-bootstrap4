@@ -1,11 +1,12 @@
 define([
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'dropdown';
     const VERSION = '4.1.3';
@@ -100,7 +101,7 @@ define([
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
@@ -129,35 +130,35 @@ define([
             this._element.focus();
             this._element.setAttribute('aria-expanded', true);
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         show() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || $(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const showEvent = $.Event(Event.SHOW, relatedTarget);
+            const showEvent = eventer.create(Event.SHOW, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(showEvent);
             if (showEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.SHOWN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.SHOWN, relatedTarget));
         }
         hide() {
             if (this._element.disabled || $(this._element).hasClass(ClassName.DISABLED) || !$(this._menu).hasClass(ClassName.SHOW)) {
                 return;
             }
             const relatedTarget = { relatedTarget: this._element };
-            const hideEvent = $.Event(Event.HIDE, relatedTarget);
+            const hideEvent = eventer.create(Event.HIDE, relatedTarget);
             const parent = Dropdown._getParentFromElement(this._element);
             $(parent).trigger(hideEvent);
             if (hideEvent.isDefaultPrevented()) {
                 return;
             }
             $(this._menu).toggleClass(ClassName.SHOW);
-            $(parent).toggleClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+            $(parent).toggleClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
         }
         dispose() {
             $.removeData(this._element, DATA_KEY);
@@ -286,7 +287,7 @@ define([
                 if (event && (event.type === 'click' && /input|textarea/i.test(event.target.tagName) || event.type === 'keyup' && event.which === TAB_KEYCODE) && $.contains(parent, event.target)) {
                     continue;
                 }
-                const hideEvent = $.Event(Event.HIDE, relatedTarget);
+                const hideEvent = eventer.create(Event.HIDE, relatedTarget);
                 $(parent).trigger(hideEvent);
                 if (hideEvent.isDefaultPrevented()) {
                     continue;
@@ -296,7 +297,7 @@ define([
                 }
                 toggles[i].setAttribute('aria-expanded', 'false');
                 $(dropdownMenu).removeClass(ClassName.SHOW);
-                $(parent).removeClass(ClassName.SHOW).trigger($.Event(Event.HIDDEN, relatedTarget));
+                $(parent).removeClass(ClassName.SHOW).trigger(eventer.create(Event.HIDDEN, relatedTarget));
             }
         }
         static _getParentFromElement(element) {

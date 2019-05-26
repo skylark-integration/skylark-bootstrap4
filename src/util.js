@@ -41,7 +41,7 @@ define([
 
     function setTransitionEndSupport() {
         $.fn.emulateTransitionEnd = transitionEndEmulator;
-        $.event.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
+        eventer.create.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
     }
     */
     const Util = {

@@ -1,11 +1,12 @@
 define([
     'skylark-langx/langx',
     'skylark-utils-dom/query',
+    'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
     'skylark-ui-popper/Popper',
     './util'
-], function (langx,$, plugins,bs4,Popper,Util) {
+], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
     const NAME = 'tooltip';
     const VERSION = '4.1.3';
@@ -174,7 +175,7 @@ define([
             if ($(this.element).css('display') === 'none') {
                 throw new Error('Please use show on visible elements');
             }
-            const showEvent = $.Event(this.constructor.Event.SHOW);
+            const showEvent = eventer.create(this.constructor.Event.SHOW);
             if (this.isWithContent() && this._isEnabled) {
                 $(this.element).trigger(showEvent);
                 const shadowRoot = Util.findShadowRoot(this.element);
@@ -239,7 +240,7 @@ define([
         }
         hide(callback) {
             const tip = this.getTipElement();
-            const hideEvent = $.Event(this.constructor.Event.HIDE);
+            const hideEvent = eventer.create(this.constructor.Event.HIDE);
             const complete = () => {
                 if (this._hoverState !== HoverState.SHOW && tip.parentNode) {
                     tip.parentNode.removeChild(tip);
