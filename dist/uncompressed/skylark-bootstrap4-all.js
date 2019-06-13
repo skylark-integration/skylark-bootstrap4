@@ -11160,7 +11160,7 @@ define('skylark-bootstrap4/collapse',[
     };
     return Collapse;
 });
-define('skylark-ui-popper/Popper',[
+define('skylark-popper/Popper',[
   "skylark-langx/skylark"
 ], function(skylark) {
   'use strict';
@@ -13724,7 +13724,7 @@ define('skylark-bootstrap4/dropdown',[
     'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
-    'skylark-ui-popper/Popper',
+    'skylark-popper/Popper',
     './util'
 ], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
@@ -13828,7 +13828,7 @@ define('skylark-bootstrap4/dropdown',[
             }
             if (!this._inNavbar) {
                 if (typeof Popper === 'undefined') {
-                    throw new TypeError("Bootstrap's dropdowns require skylark-ui-popper/Popper (https://skylark-ui-popper/Popper.org/)");
+                    throw new TypeError("Bootstrap's dropdowns require skylark-popper/Popper (https://skylark-popper/Popper.org/)");
                 }
                 let referenceElement = this._element;
                 if (this._config.reference === 'parent') {
@@ -14503,7 +14503,7 @@ define('skylark-bootstrap4/tooltip',[
     'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
-    'skylark-ui-popper/Popper',
+    'skylark-popper/Popper',
     './util'
 ], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
@@ -14583,7 +14583,7 @@ define('skylark-bootstrap4/tooltip',[
     class Tooltip {
         constructor(element, config) {
             if (typeof Popper === 'undefined') {
-                throw new TypeError("Bootstrap's tooltips require skylark-ui-popper/Popper (https://skylark-ui-popper/Popper.org/)");
+                throw new TypeError("Bootstrap's tooltips require skylark-popper/Popper (https://skylark-popper/Popper.org/)");
             }
             this._isEnabled = true;
             this._timeout = 0;

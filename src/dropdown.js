@@ -4,7 +4,7 @@ define([
     'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
-    'skylark-ui-popper/Popper',
+    'skylark-popper/Popper',
     './util'
 ], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
@@ -108,7 +108,7 @@ define([
             }
             if (!this._inNavbar) {
                 if (typeof Popper === 'undefined') {
-                    throw new TypeError("Bootstrap's dropdowns require skylark-ui-popper/Popper (https://skylark-ui-popper/Popper.org/)");
+                    throw new TypeError("Bootstrap's dropdowns require skylark-popper/Popper (https://skylark-popper/Popper.org/)");
                 }
                 let referenceElement = this._element;
                 if (this._config.reference === 'parent') {

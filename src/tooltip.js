@@ -4,7 +4,7 @@ define([
     'skylark-utils-dom/eventer',
     'skylark-utils-dom/plugins',
     "./bs4",
-    'skylark-ui-popper/Popper',
+    'skylark-popper/Popper',
     './util'
 ], function (langx,$, eventer,plugins,bs4,Popper,Util) {
     'use strict';
@@ -84,7 +84,7 @@ define([
     class Tooltip {
         constructor(element, config) {
             if (typeof Popper === 'undefined') {
-                throw new TypeError("Bootstrap's tooltips require skylark-ui-popper/Popper (https://skylark-ui-popper/Popper.org/)");
+                throw new TypeError("Bootstrap's tooltips require skylark-popper/Popper (https://skylark-popper/Popper.org/)");
             }
             this._isEnabled = true;
             this._timeout = 0;
